@@ -1,0 +1,1453 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>COIN TOSS — 運命のコイントス</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700&family=Noto+Serif+JP:wght@600;900&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --gold:#e8c874;
+    --gold-dim:#9a7f45;
+    --ink:#050508;
+  }
+  *{margin:0;padding:0;box-sizing:border-box;}
+  html,body{width:100%;height:100%;overflow:hidden;background:var(--ink);}
+  body{font-family:'Cinzel','Noto Serif JP',serif;color:var(--gold);}
+  #stage{position:fixed;inset:0;display:block;}
+
+  /* ---------- overlay UI ---------- */
+  #ui{position:fixed;inset:0;pointer-events:none;z-index:10;}
+
+  .frame{position:absolute;inset:22px;border:1px solid rgba(232,200,116,.18);}
+  .frame::before,.frame::after{content:"";position:absolute;width:26px;height:26px;border:1px solid rgba(232,200,116,.55);}
+  .frame::before{top:-1px;left:-1px;border-right:none;border-bottom:none;}
+  .frame::after{bottom:-1px;right:-1px;border-left:none;border-top:none;}
+
+  header{position:absolute;top:44px;left:0;right:0;text-align:center;}
+  header .rule{display:flex;align-items:center;justify-content:center;gap:14px;margin-bottom:10px;}
+  header .rule span{display:block;height:1px;width:min(120px,18vw);background:linear-gradient(90deg,transparent,rgba(232,200,116,.6));}
+  header .rule span:last-child{transform:scaleX(-1);}
+  header .rule i{font-style:normal;font-size:9px;letter-spacing:.55em;color:var(--gold-dim);padding-left:.55em;}
+  h1{font-size:clamp(20px,3.2vw,34px);font-weight:600;letter-spacing:.42em;padding-left:.42em;color:#f3e2b0;
+     text-shadow:0 0 24px rgba(232,200,116,.35);}
+  header .sub{margin-top:8px;font-family:'Noto Serif JP',serif;font-size:11px;letter-spacing:.5em;padding-left:.5em;color:rgba(232,200,116,.55);}
+
+  #hint{position:absolute;bottom:52px;left:0;right:0;text-align:center;transition:opacity .6s ease;}
+  #hint .k{font-family:'Noto Serif JP',serif;font-size:13px;letter-spacing:.4em;padding-left:.4em;color:rgba(232,200,116,.85);
+     animation:pulse 2.6s ease-in-out infinite;}
+  #hint .e{margin-top:8px;font-size:9px;letter-spacing:.45em;padding-left:.45em;color:rgba(232,200,116,.4);}
+  @keyframes pulse{0%,100%{opacity:.35;}50%{opacity:1;}}
+
+  /* ---------- result ---------- */
+  #result{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;
+     opacity:0;transform:scale(.86);transition:opacity .55s cubic-bezier(.2,.9,.25,1),transform .55s cubic-bezier(.2,.9,.25,1);}
+  #result.show{opacity:1;transform:scale(1);}
+  #result .kanji{font-family:'Noto Serif JP',serif;font-weight:900;font-size:clamp(110px,22vw,240px);line-height:1;
+     background:linear-gradient(180deg,#fff6d8 0%,#f0d488 38%,#b98a2e 72%,#f7e6ae 100%);
+     -webkit-background-clip:text;background-clip:text;color:transparent;
+     filter:drop-shadow(0 0 34px rgba(232,200,116,.45)) drop-shadow(0 6px 30px rgba(0,0,0,.8));}
+  #result .latin{margin-top:14px;font-size:clamp(13px,1.6vw,18px);letter-spacing:.9em;padding-left:.9em;color:#f3e2b0;}
+  #result .stamp{margin-top:22px;width:110px;height:1px;background:linear-gradient(90deg,transparent,rgba(232,200,116,.7),transparent);}
+
+  #flash{position:fixed;inset:0;background:radial-gradient(circle at 50% 62%,rgba(255,236,180,.9),rgba(255,236,180,0) 55%);
+     opacity:0;pointer-events:none;z-index:9;}
+
+  /* ---------- slow-motion message ---------- */
+  #slow-msg{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;padding-bottom:17vh;
+     pointer-events:none;z-index:8;opacity:0;transition:opacity .9s ease;}
+  #slow-msg.show{opacity:1;}
+  #slow-msg .line{position:relative;font-family:'Noto Serif JP',serif;font-size:clamp(13px,1.8vw,20px);
+     letter-spacing:.35em;padding-left:.35em;color:rgba(243,226,176,.88);text-align:center;
+     text-shadow:0 0 20px rgba(232,200,116,.35), 0 0 60px rgba(232,200,116,.15);}
+  #slow-msg .line::before,#slow-msg .line::after{content:"";position:absolute;top:50%;width:min(90px,12vw);height:1px;
+     background:linear-gradient(90deg,transparent,rgba(232,200,116,.5));}
+  #slow-msg .line::before{right:calc(100% + 18px);}
+  #slow-msg .line::after{left:calc(100% + 18px);transform:scaleX(-1);}
+  #slow-msg .sub{margin-top:14px;font-size:clamp(9px,1vw,12px);letter-spacing:.55em;padding-left:.55em;
+     color:rgba(232,200,116,.45);font-style:italic;transition:opacity .6s ease;}
+
+  /* ---------- secret (coin lands on its edge, 1%) ---------- */
+  #secret{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;
+     padding-bottom:15vh;text-align:center;opacity:0;transform:translateY(14px);pointer-events:none;
+     transition:opacity 1.2s ease,transform 1.2s cubic-bezier(.2,.9,.25,1);}
+  #secret.show{opacity:1;transform:none;}
+  #secret .tag{font-size:clamp(9px,1vw,12px);letter-spacing:.7em;padding-left:.7em;color:rgba(232,200,116,.7);}
+  #secret .main{margin-top:14px;font-family:'Noto Serif JP',serif;font-weight:900;font-size:clamp(30px,5.6vw,64px);
+     letter-spacing:.3em;padding-left:.3em;line-height:1.2;
+     background:linear-gradient(100deg,#fff6d8 0%,#f0d488 25%,#ffffff 45%,#f0d488 60%,#b98a2e 80%,#fff6d8 100%);
+     background-size:220% 100%;-webkit-background-clip:text;background-clip:text;color:transparent;
+     filter:drop-shadow(0 0 26px rgba(232,200,116,.55)) drop-shadow(0 4px 20px rgba(0,0,0,.85));
+     animation:shimmer 4.5s linear infinite;}
+  #secret .ja{margin-top:16px;font-family:'Noto Serif JP',serif;font-size:clamp(12px,1.6vw,18px);
+     letter-spacing:.3em;padding-left:.3em;line-height:1.9;color:rgba(243,226,176,.92);
+     text-shadow:0 0 20px rgba(232,200,116,.4),0 2px 14px rgba(0,0,0,.9);}
+  #secret .en{margin-top:8px;font-size:clamp(9px,1vw,12px);letter-spacing:.4em;padding-left:.4em;font-style:italic;
+     color:rgba(232,200,116,.55);text-shadow:0 2px 12px rgba(0,0,0,.9);}
+  @keyframes shimmer{0%{background-position:220% 0;}100%{background-position:-120% 0;}}
+
+  .corner{position:absolute;font-size:9px;letter-spacing:.35em;color:rgba(232,200,116,.38);}
+  .corner.bl{left:42px;bottom:38px;}
+  .corner.br{right:42px;bottom:38px;text-align:right;}
+
+  #intro{position:fixed;inset:0;background:var(--ink);z-index:20;display:flex;align-items:center;justify-content:center;
+     flex-direction:column;gap:18px;transition:opacity 1.1s ease;}
+  #intro.gone{opacity:0;pointer-events:none;}
+  #intro .t{font-size:11px;letter-spacing:.6em;padding-left:.6em;color:var(--gold-dim);animation:pulse 1.8s ease-in-out infinite;}
+
+  /* ---------- cinematic letterbox (slides in while the coin is airborne) ---------- */
+  .bar{position:fixed;left:0;right:0;height:0;background:#000;z-index:9;pointer-events:none;
+     transition:height 1s cubic-bezier(.2,.8,.2,1);}
+  .bar.top{top:0;} .bar.bot{bottom:0;}
+  body.cine .bar{height:9vh;}
+  .frame,header,.corner{transition:opacity .8s ease;}
+  body.cine .frame,body.cine header,body.cine .corner{opacity:0;}
+</style>
+</head>
+<body>
+
+<canvas id="stage"></canvas>
+
+<div id="ui">
+  <div class="frame"></div>
+  <header>
+    <div class="rule"><span></span><i>FATE</i><span></span></div>
+    <h1>COIN TOSS</h1>
+    <div class="sub">運命は、一投に委ねられる</div>
+  </header>
+
+  <div id="result">
+    <div class="kanji" id="kanji">表</div>
+    <div class="latin" id="latin">HEADS</div>
+    <div class="stamp"></div>
+  </div>
+
+  <div id="secret">
+    <div class="tag">HIDDEN&nbsp;&nbsp;FATE&nbsp;&nbsp;—&nbsp;&nbsp;1&nbsp;/&nbsp;100</div>
+    <div class="main">コインは、立った。</div>
+    <div class="ja">表でもなく、裏でもない。<br>百分の一の奇跡を、あなたは引き当てた。</div>
+    <div class="en">Neither heads nor tails — you have found the one in a hundred.</div>
+  </div>
+
+  <div id="slow-msg">
+    <div class="line" id="slow-line">一瞬の決断が、永遠を変える</div>
+    <div class="sub" id="slow-sub">A single moment shapes eternity</div>
+  </div>
+
+  <div id="hint">
+    <div class="k">クリック / SPACE でコイントス</div>
+    <div class="e">CLICK&nbsp;&nbsp;OR&nbsp;&nbsp;PRESS&nbsp;&nbsp;SPACE</div>
+  </div>
+
+  <div class="corner bl">NO.047 — FORTUNE</div>
+  <div class="corner br">EST. MMXXVI</div>
+</div>
+
+<div class="bar top"></div>
+<div class="bar bot"></div>
+<div id="flash"></div>
+<div id="intro"><div class="t">CASTING&nbsp;FATE&nbsp;&nbsp;INTO&nbsp;&nbsp;LIGHT…</div></div>
+
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+  }
+}
+</script>
+
+<script type="module">
+import * as THREE from 'three';
+import { EffectComposer }   from 'three/addons/postprocessing/EffectComposer.js';
+import { RenderPass }       from 'three/addons/postprocessing/RenderPass.js';
+import { UnrealBloomPass }  from 'three/addons/postprocessing/UnrealBloomPass.js';
+import { ShaderPass }       from 'three/addons/postprocessing/ShaderPass.js';
+import { SMAAPass }         from 'three/addons/postprocessing/SMAAPass.js';
+import { OutputPass }       from 'three/addons/postprocessing/OutputPass.js';
+import { RoomEnvironment }  from 'three/addons/environments/RoomEnvironment.js';
+import { Reflector }        from 'three/addons/objects/Reflector.js';
+
+/* ============================================================
+   renderer / scene / camera
+============================================================ */
+const canvas   = document.getElementById('stage');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias:false, powerPreference:'high-performance' });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.setSize(innerWidth, innerHeight);
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.15;
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x040407);
+scene.fog = new THREE.Fog(0x040407, 9, 26);
+
+const camera = new THREE.PerspectiveCamera(55, innerWidth/innerHeight, 0.1, 100);
+const CAM_BASE = new THREE.Vector3(0, 1.9, 5.4);
+const LOOK_BASE = new THREE.Vector3(0, 1.0, 0);
+camera.position.copy(CAM_BASE);
+
+/* ray-traced-style reflections: full IBL environment */
+const pmrem = new THREE.PMREMGenerator(renderer);
+scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.06).texture;
+
+/* ============================================================
+   lighting
+============================================================ */
+const key = new THREE.SpotLight(0xfff2d8, 260, 40, Math.PI/5.2, 0.45, 1.8);
+key.position.set(4.5, 8.5, 4.5);
+key.castShadow = true;
+key.shadow.mapSize.set(4096, 4096);
+key.shadow.bias = -0.00015;
+key.shadow.radius = 4;
+key.shadow.camera.near = 2; key.shadow.camera.far = 30;
+scene.add(key);
+
+const rim = new THREE.SpotLight(0x6f86ff, 180, 40, Math.PI/4.5, 0.6, 1.9);
+rim.position.set(-6.5, 5.5, -5.5);
+scene.add(rim);
+
+const fill = new THREE.PointLight(0xffc46b, 14, 15, 1.8);
+fill.position.set(-2.5, 1.2, 3.5);
+scene.add(fill);
+
+const flashLight = new THREE.PointLight(0xffe9b0, 0, 12, 2);
+flashLight.position.set(0, 0.5, 0.6);
+scene.add(flashLight);
+
+scene.add(new THREE.AmbientLight(0x1a1c26, 1.2));
+
+/* ============================================================
+   floor : true mirror + shadow catcher + engraved rings
+============================================================ */
+const mirror = new Reflector(new THREE.CircleGeometry(14, 96), {
+  clipBias: 0.003,
+  textureWidth: 2048,
+  textureHeight: 2048,
+  color: 0x777d86            /* floor reflection strength (was 0x9aa0a8) */
+});
+mirror.rotation.x = -Math.PI/2;
+scene.add(mirror);
+
+const shadowCatcher = new THREE.Mesh(
+  new THREE.CircleGeometry(14, 96),
+  new THREE.ShadowMaterial({ opacity: 0.42 })
+);
+shadowCatcher.rotation.x = -Math.PI/2;
+shadowCatcher.position.y = 0.002;
+shadowCatcher.receiveShadow = true;
+scene.add(shadowCatcher);
+
+/* faint ceremonial rings floating above the mirror */
+(function makeRings(){
+  const c = document.createElement('canvas'); c.width = c.height = 1024;
+  const g = c.getContext('2d');
+  g.translate(512,512);
+  for(let r=140;r<=480;r+=85){
+    g.beginPath(); g.arc(0,0,r,0,Math.PI*2);
+    g.strokeStyle = 'rgba(232,200,116,0.5)'; g.lineWidth = 2; g.stroke();
+  }
+  for(let i=0;i<72;i++){
+    const a = i/72*Math.PI*2;
+    g.save(); g.rotate(a);
+    g.fillStyle = 'rgba(232,200,116,0.55)';
+    g.fillRect(492,-1,14,2);
+    g.restore();
+  }
+  const tex = new THREE.CanvasTexture(c);
+  tex.anisotropy = renderer.capabilities.getMaxAnisotropy();
+  const m = new THREE.Mesh(
+    new THREE.CircleGeometry(6.5, 96),
+    new THREE.MeshBasicMaterial({ map:tex, transparent:true, opacity:0.16, blending:THREE.AdditiveBlending, depthWrite:false })
+  );
+  m.rotation.x = -Math.PI/2; m.position.y = 0.004;
+  scene.add(m);
+})();
+
+/* ============================================================
+   the coin — canvas-engraved gold
+============================================================ */
+function faceTexture(kanji){
+  const s = 1024, c = document.createElement('canvas'); c.width = c.height = s;
+  const g = c.getContext('2d'), cx = s/2;
+
+  const bg = g.createRadialGradient(cx-140,cx-160,80, cx,cx,640);
+  bg.addColorStop(0,'#fdf3cd'); bg.addColorStop(.35,'#eccd7e');
+  bg.addColorStop(.7,'#c39a3e'); bg.addColorStop(1,'#8a6420');
+  g.fillStyle = bg; g.fillRect(0,0,s,s);
+
+  g.strokeStyle = 'rgba(90,60,10,.85)'; g.lineWidth = 10;
+  g.beginPath(); g.arc(cx,cx,470,0,Math.PI*2); g.stroke();
+  g.strokeStyle = 'rgba(255,244,200,.7)'; g.lineWidth = 4;
+  g.beginPath(); g.arc(cx,cx,452,0,Math.PI*2); g.stroke();
+
+  /* beaded border */
+  for(let i=0;i<96;i++){
+    const a=i/96*Math.PI*2;
+    g.beginPath();
+    g.arc(cx+Math.cos(a)*430, cx+Math.sin(a)*430, 7, 0, Math.PI*2);
+    g.fillStyle = i%2 ? 'rgba(120,84,22,.8)' : 'rgba(255,238,180,.8)';
+    g.fill();
+  }
+
+  /* laurel-ish ring of diamonds */
+  for(let i=0;i<24;i++){
+    const a=i/24*Math.PI*2;
+    g.save(); g.translate(cx+Math.cos(a)*300, cx+Math.sin(a)*300); g.rotate(a);
+    g.fillStyle='rgba(110,76,18,.55)';
+    g.beginPath(); g.moveTo(0,-16); g.lineTo(10,0); g.lineTo(0,16); g.lineTo(-10,0);
+    g.closePath(); g.fill(); g.restore();
+  }
+
+  /* the kanji — engraved look */
+  g.textAlign='center'; g.textBaseline='middle';
+  g.font='900 340px "Noto Serif JP", serif';
+  g.fillStyle='rgba(255,244,200,.55)';
+  g.fillText(kanji, cx, cx-16);
+  g.fillStyle='#7a5514';
+  g.fillText(kanji, cx, cx);
+  g.strokeStyle='rgba(60,40,8,.9)'; g.lineWidth=6;
+  g.strokeText(kanji, cx, cx);
+
+  /* stars */
+  const star=(x,y,r)=>{g.save();g.translate(x,y);g.beginPath();
+    for(let i=0;i<10;i++){const rr=i%2?r*.42:r,a=i/10*Math.PI*2-Math.PI/2;
+      g.lineTo(Math.cos(a)*rr,Math.sin(a)*rr);}g.closePath();
+    g.fillStyle='rgba(120,84,22,.8)';g.fill();g.restore();};
+  star(cx, cx-330, 34); star(cx, cx+330, 34);
+
+  const tex = new THREE.CanvasTexture(c);
+  tex.anisotropy = renderer.capabilities.getMaxAnisotropy();
+  return tex;
+}
+
+function edgeTexture(){
+  const c=document.createElement('canvas'); c.width=2048; c.height=128;
+  const g=c.getContext('2d');
+  const gr=g.createLinearGradient(0,0,0,128);
+  gr.addColorStop(0,'#8a6420'); gr.addColorStop(.5,'#f0d488'); gr.addColorStop(1,'#8a6420');
+  g.fillStyle=gr; g.fillRect(0,0,2048,128);
+  for(let x=0;x<2048;x+=16){
+    g.fillStyle = (x/16)%2 ? 'rgba(80,55,10,.7)' : 'rgba(255,240,190,.55)';
+    g.fillRect(x,0,6,128);
+  }
+  const t=new THREE.CanvasTexture(c);
+  t.wrapS=THREE.RepeatWrapping; t.repeat.x=2;
+  return t;
+}
+
+const coin = new THREE.Group();
+{
+  const goldFace = (kanji)=> new THREE.MeshPhysicalMaterial({
+    map: faceTexture(kanji),
+    bumpMap: faceTexture(kanji), bumpScale: 0.6,
+    metalness: 1.0, roughness: 0.20,
+    clearcoat: 0.65, clearcoatRoughness: 0.12,
+    envMapIntensity: 1.15
+  });
+  const goldEdge = new THREE.MeshPhysicalMaterial({
+    map: edgeTexture(), bumpMap: edgeTexture(), bumpScale: 0.4,
+    metalness: 1.0, roughness: 0.26, envMapIntensity: 1.05
+  });
+
+  const body = new THREE.Mesh(
+    new THREE.CylinderGeometry(1, 1, 0.13, 160, 1, false),
+    [goldEdge, goldFace('表'), goldFace('裏')]
+  );
+  body.castShadow = true;
+  coin.add(body);
+
+  /* raised rims & face rings — real geometry for the light to caress */
+  const rimMat = new THREE.MeshPhysicalMaterial({
+    color:0xf5dc9a, metalness:1, roughness:0.14, clearcoat:0.6, envMapIntensity:1.25
+  });
+  const outer = new THREE.Mesh(new THREE.TorusGeometry(1.0, 0.045, 48, 200), rimMat);
+  outer.rotation.x = Math.PI/2; outer.castShadow = true;
+  coin.add(outer);
+  for(const side of [1,-1]){
+    const ring = new THREE.Mesh(new THREE.TorusGeometry(0.8, 0.018, 32, 160), rimMat);
+    ring.rotation.x = Math.PI/2;
+    ring.position.y = side * 0.066;
+    coin.add(ring);
+  }
+}
+const COIN_REST_Y = 0.068;
+coin.position.y = COIN_REST_Y;
+scene.add(coin);
+const coinMats = [];
+coin.traverse(o=>{
+  if(!o.material) return;
+  (Array.isArray(o.material) ? o.material : [o.material]).forEach(m=>{
+    if(!coinMats.includes(m)){ m.userData.baseEnv = m.envMapIntensity; coinMats.push(m); }
+  });
+});
+let coinGlint = 1;
+const SPIN_GLINT = 0.78;           /* reflection strength of the coin while it is in the air (1 = unchanged) */
+
+/* ============================================================
+   ambient golden dust
+============================================================ */
+const DUST = 500;
+const dustGeo = new THREE.BufferGeometry();
+const dustPos = new Float32Array(DUST*3);
+for(let i=0;i<DUST;i++){
+  dustPos[i*3]   = (Math.random()-0.5)*18;
+  dustPos[i*3+1] = Math.random()*7;
+  dustPos[i*3+2] = (Math.random()-0.5)*18;
+}
+dustGeo.setAttribute('position', new THREE.BufferAttribute(dustPos,3));
+const dotTex = (()=>{
+  const c = document.createElement('canvas'); c.width = c.height = 64;
+  const g = c.getContext('2d');
+  const gr = g.createRadialGradient(32,32,0,32,32,32);
+  gr.addColorStop(0,'rgba(255,255,255,1)'); gr.addColorStop(.35,'rgba(255,255,255,.55)'); gr.addColorStop(1,'rgba(255,255,255,0)');
+  g.fillStyle = gr; g.fillRect(0,0,64,64);
+  return new THREE.CanvasTexture(c);
+})();
+const dust = new THREE.Points(dustGeo, new THREE.PointsMaterial({
+  color:0xffe6a8, size:0.05, map:dotTex, transparent:true, opacity:0.55,
+  blending:THREE.AdditiveBlending, depthWrite:false, sizeAttenuation:true
+}));
+scene.add(dust);
+
+/* ============================================================
+   sparks + shockwave (landing FX)
+============================================================ */
+const SPARKS = 220;
+const sparkGeo = new THREE.BufferGeometry();
+const sparkPos = new Float32Array(SPARKS*3).fill(-999);
+const sparkVel = new Float32Array(SPARKS*3);
+const sparkLife = new Float32Array(SPARKS);
+sparkGeo.setAttribute('position', new THREE.BufferAttribute(sparkPos,3));
+const sparks = new THREE.Points(sparkGeo, new THREE.PointsMaterial({
+  color:0xffd77e, size:0.07, transparent:true, opacity:0.95,
+  blending:THREE.AdditiveBlending, depthWrite:false
+}));
+scene.add(sparks);
+
+function burstSparks(big){
+  for(let i=0;i<SPARKS;i++){
+    const a = Math.random()*Math.PI*2, r = Math.random();
+    sparkPos[i*3]=Math.cos(a)*r*0.5; sparkPos[i*3+1]=big ? 0.08 + Math.random()*2.0 : 0.08; sparkPos[i*3+2]=Math.sin(a)*r*0.5;
+    const sp = 1.6+Math.random()*3.4;
+    sparkVel[i*3]=Math.cos(a)*sp; sparkVel[i*3+1]=2.2+Math.random()*4.5; sparkVel[i*3+2]=Math.sin(a)*sp;
+    sparkLife[i]=0.9+Math.random()*0.9;
+  }
+  sparkGeo.attributes.position.needsUpdate = true;
+}
+
+const wave = new THREE.Mesh(
+  new THREE.RingGeometry(0.98, 1.0, 128),
+  new THREE.MeshBasicMaterial({ color:0xffe6a8, transparent:true, opacity:0, side:THREE.DoubleSide, blending:THREE.AdditiveBlending, depthWrite:false })
+);
+wave.rotation.x = -Math.PI/2; wave.position.y = 0.012;
+scene.add(wave);
+let waveT = 1e9;
+
+const flashEl = document.getElementById('flash');
+let flashV = 0;
+
+/* ============================================================
+   post-processing : bloom / grade / SMAA
+============================================================ */
+const composer = new EffectComposer(renderer);
+composer.addPass(new RenderPass(scene, camera));
+
+const bloom = new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), 0.5, 0.65, 0.86);
+composer.addPass(bloom);
+
+composer.addPass(new OutputPass());
+
+const GradeShader = {
+  uniforms:{ tDiffuse:{value:null}, uTime:{value:0},
+             uAberr:{value:0.001}, uRadial:{value:0}, uVig:{value:0} },
+  vertexShader:`varying vec2 vUv; void main(){ vUv=uv; gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.); }`,
+  fragmentShader:`
+    uniform sampler2D tDiffuse; uniform float uTime, uAberr, uRadial, uVig; varying vec2 vUv;
+    float rnd(vec2 p){ return fract(sin(dot(p, vec2(12.9898,78.233)))*43758.5453); }
+    void main(){
+      vec2 d  = vUv - 0.5;
+      vec2 ab = d * uAberr;                                          /* chromatic aberration */
+      vec3 col;
+      if(uRadial > 0.0005){                                          /* radial rush blur */
+        vec3 acc = vec3(0.0);
+        for(int i=0;i<7;i++){
+          vec2 o = d * uRadial * (float(i)/6.0);
+          acc.r += texture2D(tDiffuse, vUv - o + ab).r;
+          acc.g += texture2D(tDiffuse, vUv - o     ).g;
+          acc.b += texture2D(tDiffuse, vUv - o - ab).b;
+        }
+        col = acc / 7.0;
+      } else {
+        col = vec3(texture2D(tDiffuse, vUv + ab).r, texture2D(tDiffuse, vUv).g, texture2D(tDiffuse, vUv - ab).b);
+      }
+      col *= smoothstep(1.05, 0.32, length(d)*(1.18 + uVig*0.40));   /* vignette (deepens in slow-mo) */
+      float g = rnd(vUv*vec2(1531.0,911.0)+fract(uTime)*7.13);
+      col += (g-0.5)*0.032;                                          /* grain  */
+      gl_FragColor = vec4(col, 1.0);
+    }`
+};
+const grade = new ShaderPass(GradeShader);
+composer.addPass(grade);
+composer.addPass(new SMAAPass());
+
+/* ============================================================
+   sound — fully synthesized, no assets
+   palette: struck metal, glass, air, sub-bass.  No voices, no melody.
+   launch → time slows (sub drone + glass haze + spin whir) → riser → impact + gold dust + long bell
+============================================================ */
+let AC = null, MASTER = null, REVSEND = null, NOISE = null, muted = false;
+let SPIN = null, sfx = {};
+let AUDIO_LITE = false;
+let TONE = null, REVWET = null, PADIN = null, PADGAIN = null, PADLP = null, padStarted = false, padIdx = 0;
+const LIVE = [];                    /* sustained layers, faded out on landing */
+
+function audio(){
+  if(!AC){ AC = new (window.AudioContext||window.webkitAudioContext)({ latencyHint:'playback' }); buildBus(); }
+  if(AC.state==='suspended') AC.resume();
+  return AC;
+}
+function makeIR(ac, dur, decay){      /* synthetic hall: decaying stereo noise that darkens over time */
+  const n = Math.floor(ac.sampleRate*dur), b = ac.createBuffer(2, n, ac.sampleRate);
+  for(let c=0;c<2;c++){
+    const d = b.getChannelData(c); let lp = 0;
+    for(let i=0;i<n;i++){
+      lp += ((Math.random()*2-1) - lp)*(0.65 - 0.58*(i/n));
+      d[i] = lp*Math.pow(1 - i/n, decay);
+    }
+  }
+  return b;
+}
+function buildBus(){
+  const ac = AC;
+  const comp = ac.createDynamicsCompressor();
+  comp.threshold.value = -20; comp.knee.value = 24; comp.ratio.value = 3;
+  comp.attack.value = 0.008; comp.release.value = 0.35;
+  MASTER = ac.createGain(); MASTER.gain.value = muted ? 0 : 0.68;
+  const lim = ac.createDynamicsCompressor();          /* brick-wall-ish limiter: never clip */
+  lim.threshold.value = -3; lim.knee.value = 3; lim.ratio.value = 12; lim.attack.value = 0.002; lim.release.value = 0.22;
+  const clip = ac.createWaveShaper();                  /* soft clip as a last safety net */
+  const curve = new Float32Array(2048);
+  for(let i=0;i<curve.length;i++){ const x = i/(curve.length-1)*2 - 1; curve[i] = Math.tanh(x*1.1)/Math.tanh(1.1)*0.95; }
+  clip.curve = curve;
+  TONE = ac.createBiquadFilter(); TONE.type = 'lowpass'; TONE.frequency.value = 20000; TONE.Q.value = 0.7;
+  const hp = ac.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 42; hp.Q.value = 0.7;   /* keep sub-bass off small speakers */
+  MASTER.connect(TONE); TONE.connect(hp); hp.connect(comp); comp.connect(lim); lim.connect(clip); clip.connect(ac.destination);
+  const rev = ac.createConvolver(); rev.buffer = makeIR(ac, 2.4, 2.4);
+  const wet = ac.createGain(); wet.gain.value = 0.6;
+  rev.connect(wet); wet.connect(MASTER); REVWET = wet;
+  REVSEND = ac.createGain(); REVSEND.connect(rev);
+  NOISE = ac.createBuffer(1, ac.sampleRate*2, ac.sampleRate);
+  const nd = NOISE.getChannelData(0); for(let i=0;i<nd.length;i++) nd[i] = Math.random()*2-1;
+
+  /* pad bus: a warm, slowly breathing bed under everything */
+  PADIN = ac.createGain();
+  PADLP = ac.createBiquadFilter(); PADLP.type = 'lowpass'; PADLP.frequency.value = 1100; PADLP.Q.value = 0.5;
+  PADGAIN = ac.createGain(); PADGAIN.gain.value = 1;
+  PADIN.connect(PADLP); PADLP.connect(PADGAIN); route(PADGAIN, 0.9, 0.75);
+  const plfo = ac.createOscillator(), plg = ac.createGain();
+  plfo.frequency.value = 0.07; plg.gain.value = 350; plfo.connect(plg); plg.connect(PADLP.frequency); plfo.start();
+  startPad();
+}
+function route(node, dry, wet, pan){
+  let src = node;
+  if(pan !== undefined && AC.createStereoPanner){ const p = AC.createStereoPanner(); p.pan.value = pan; node.connect(p); src = p; }
+  if(dry > 0){ const d = AC.createGain(); d.gain.value = dry; src.connect(d); d.connect(MASTER); }
+  if(wet > 0){ const w = AC.createGain(); w.gain.value = wet; src.connect(w); w.connect(REVSEND); }
+}
+function noiseSrc(t, dur){
+  const s = AC.createBufferSource(); s.buffer = NOISE; s.loop = true;
+  s.start(t, Math.random()*1.5); s.stop(t + dur); return s;
+}
+
+/* struck metal / glass: inharmonic partials, each ringing down at its own rate */
+const BAR = [1, 2.76, 5.40, 8.93], BAR_G = [1, .55, .30, .16];
+function strike(f, t, vol, dur, wet, pan, ratios, gains){
+  ratios = ratios || BAR; gains = gains || BAR_G;
+  const sum = AC.createGain();
+  ratios.forEach((r,i)=>{
+    const o = AC.createOscillator(), g = AC.createGain(), d = dur/(1 + i*0.7);
+    o.type = 'sine'; o.frequency.value = f*r*(1 + (Math.random()-0.5)*0.003);
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.linearRampToValueAtTime(vol*gains[i], t + 0.003);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + d);
+    o.connect(g); g.connect(sum); o.start(t); o.stop(t + d + 0.05);
+  });
+  route(sum, 1, wet, pan);
+}
+
+/* sustained layers (faded out when the coin lands) */
+function layer(t, fadeIn, level, dry, wet){
+  const env = AC.createGain();
+  env.gain.setValueAtTime(0.0001, t); env.gain.exponentialRampToValueAtTime(level, t + fadeIn);
+  route(env, dry, wet);
+  const L = { env, oscs:[] }; LIVE.push(L); return L;
+}
+function layerOsc(L, type, f, t){
+  const o = AC.createOscillator(); o.type = type; o.frequency.value = f;
+  o.start(t); o.stop(t + 30); L.oscs.push(o); return o;
+}
+function fadeLive(t, dur){
+  for(const L of LIVE){
+    L.env.gain.cancelScheduledValues(t);
+    L.env.gain.setValueAtTime(Math.max(L.env.gain.value, 0.0001), t);
+    L.env.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    L.oscs.forEach(o=>{ try{ o.stop(t + dur + 0.1); }catch(e){} });
+  }
+  LIVE.length = 0;
+}
+
+/* ---- launch: thumb-flick ping + low air thump + rising air sweep ---- */
+function playWhoosh(){
+  const t = AC.currentTime, dur = 1.15;
+  const s = noiseSrc(t, dur);
+  const hp = AC.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 250;
+  const bp = AC.createBiquadFilter(); bp.type = 'bandpass'; bp.Q.value = 1.6;
+  bp.frequency.setValueAtTime(300, t);
+  bp.frequency.exponentialRampToValueAtTime(3200, t + dur*0.55);
+  bp.frequency.exponentialRampToValueAtTime(600, t + dur);
+  const g = AC.createGain(); g.gain.setValueAtTime(0.0001, t);
+  g.gain.exponentialRampToValueAtTime(0.17, t + 0.30);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+  s.connect(hp); hp.connect(bp); bp.connect(g); route(g, 1, 0.25);
+}
+function sfxLaunch(){
+  const ac = audio(), t = ac.currentTime + 0.01;
+  sfx = { slow:false, apex:false, riser:false, omen:false, acc:0, heartT:0, bellT:0.3 };
+  /* a short rising breath first, so the flick grows out of the room instead of starting from nothing */
+  { const s = noiseSrc(t, 0.45), bp = ac.createBiquadFilter(), bg = ac.createGain();
+    bp.type = 'bandpass'; bp.Q.value = 1.2;
+    bp.frequency.setValueAtTime(220, t); bp.frequency.exponentialRampToValueAtTime(1900, t + 0.32);
+    bg.gain.setValueAtTime(0.0001, t);
+    bg.gain.exponentialRampToValueAtTime(0.07, t + 0.2); bg.gain.exponentialRampToValueAtTime(0.0001, t + 0.45);
+    s.connect(bp); bp.connect(bg); route(bg, 1, 0.25); }
+  strike(2637, t + 0.06, 0.15, 1.1, 0.6);
+  strike(3951, t + 0.07, 0.06, 0.7, 0.55);
+  const o = ac.createOscillator(), g = ac.createGain();
+  o.type = 'sine';
+  o.frequency.setValueAtTime(120, t + 0.04); o.frequency.exponentialRampToValueAtTime(60, t + 0.32);
+  g.gain.setValueAtTime(0.0001, t + 0.04);
+  g.gain.exponentialRampToValueAtTime(0.20, t + 0.07); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.36);
+  o.connect(g); route(g, 1, 0.15); o.start(t); o.stop(t + 0.4);
+  playWhoosh();
+}
+
+/* ---- coin spin whir: pitch & flutter follow the real rotation speed, so it winds down in slow-mo ---- */
+function sfxSpinStart(){
+  if(!AC) return; const t = AC.currentTime;
+  const env = AC.createGain(); env.gain.setValueAtTime(0.0001, t);
+  const flut = AC.createGain(); flut.gain.value = 0.65;
+  const lfo = AC.createOscillator(), lg = AC.createGain();
+  lfo.frequency.value = 3; lg.gain.value = 0.35; lfo.connect(lg); lg.connect(flut.gain);
+  const o1 = AC.createOscillator(), o2 = AC.createOscillator(), g1 = AC.createGain(), g2 = AC.createGain();
+  o1.type = 'sine'; o2.type = 'sine'; g1.gain.value = 0.6; g2.gain.value = 0.22;
+  o1.frequency.value = 140; o2.frequency.value = 140*2.76;   /* begin at the idle pitch: no swoop from the default 440 Hz */
+  o1.connect(g1); o2.connect(g2); g1.connect(flut); g2.connect(flut); flut.connect(env);
+  route(env, 1, 0.35);
+  [o1, o2, lfo].forEach(n=>{ n.start(t); n.stop(t + 30); });
+  SPIN = { env, o1, o2, lfo };
+}
+function sfxSpinUpdate(rate){
+  if(!SPIN) return; const t = AC.currentTime;
+  SPIN.o1.frequency.setTargetAtTime(140 + 150*Math.min(rate, 5), t, 0.05);
+  SPIN.o2.frequency.setTargetAtTime((140 + 150*Math.min(rate, 5))*2.76, t, 0.05);
+  SPIN.lfo.frequency.setTargetAtTime(Math.max(0.3, rate*2), t, 0.05);
+  SPIN.env.gain.setTargetAtTime(0.03 + 0.06*Math.min(1, rate/2.5), t, 0.08);
+}
+function sfxSpinStop(t){
+  if(!SPIN) return;
+  SPIN.env.gain.cancelScheduledValues(t); SPIN.env.gain.setTargetAtTime(0.0001, t, 0.05);
+  [SPIN.o1, SPIN.o2, SPIN.lfo].forEach(n=>{ try{ n.stop(t + 0.5); }catch(e){} });
+  SPIN = null;
+}
+
+/* ---- slow-motion: the world sinks — falling glide, deep thump, sub drone, drifting glass haze ---- */
+function sfxSlowEnter(){
+  if(!AC) return; const t = AC.currentTime;
+  { const o = AC.createOscillator(), g = AC.createGain(), lp = AC.createBiquadFilter();
+    o.type = 'triangle'; lp.type = 'lowpass'; lp.frequency.value = 800;
+    o.frequency.setValueAtTime(700, t); o.frequency.exponentialRampToValueAtTime(60, t + 2.0);
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(0.10, t + 0.15); g.gain.exponentialRampToValueAtTime(0.0001, t + 2.1);
+    o.connect(lp); lp.connect(g); route(g, 1, 0.4); o.start(t); o.stop(t + 2.2); }
+  { const o = AC.createOscillator(), g = AC.createGain();
+    o.type = 'sine';
+    o.frequency.setValueAtTime(96, t); o.frequency.exponentialRampToValueAtTime(48, t + 0.6);
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(0.28, t + 0.02); g.gain.exponentialRampToValueAtTime(0.0001, t + 1.0);
+    o.connect(g); route(g, 1, 0.1); o.start(t); o.stop(t + 1.1); }
+  const D = layer(t, 1.8, 0.08, 1, 0.1);
+  layerOsc(D, 'sine', 55, t).connect(D.env);
+  layerOsc(D, 'sine', 55.7, t).connect(D.env);
+  choirLayer([62, 66, 69, 74], 2.6, 0.22);                 /* a hushed "ah" choir rises as time stretches */
+  const Hz = layer(t, 2.4, 0.6, 0.6, 0.9);
+  [1, 1.37, 1.91, 2.53, 3.11, 3.97].forEach((r, i)=>{
+    const o = layerOsc(Hz, 'sine', 1180*r, t), g = AC.createGain();
+    g.gain.value = 0.03;
+    const lfo = layerOsc(Hz, 'sine', 0.18 + 0.11*i, t), lg = AC.createGain();
+    lg.gain.value = 0.026; lfo.connect(lg); lg.connect(g.gain);
+    o.connect(g); g.connect(Hz.env);
+  });
+}
+function sfxApex(){
+  if(!AC) return;
+  strike(1976, AC.currentTime, 0.12, 3.5, 0.95, 0);
+  choirLayer([67, 71, 74, 78], 1.8, 0.22);                 /* apex: the choir lifts into a brighter chord */
+}
+
+/* ---- the fall: rising sweep + sub swell, building into the impact ---- */
+function sfxRiser(dur){
+  if(!AC) return; const t = AC.currentTime;
+  const s = noiseSrc(t, dur + 0.1);
+  const hp = AC.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 500;
+  const bp = AC.createBiquadFilter(); bp.type = 'bandpass';
+  bp.frequency.setValueAtTime(500, t); bp.frequency.exponentialRampToValueAtTime(9000, t + dur);
+  bp.Q.setValueAtTime(1.5, t); bp.Q.linearRampToValueAtTime(5, t + dur);
+  const g = AC.createGain();
+  g.gain.setValueAtTime(0.0001, t);
+  g.gain.exponentialRampToValueAtTime(0.22, t + dur*0.97);
+  g.gain.linearRampToValueAtTime(0.0001, t + dur + 0.06);
+  s.connect(hp); hp.connect(bp); bp.connect(g); route(g, 1, 0.3);
+  const o = AC.createOscillator(), og = AC.createGain();
+  o.type = 'sine';
+  o.frequency.setValueAtTime(55, t); o.frequency.exponentialRampToValueAtTime(110, t + dur);
+  og.gain.setValueAtTime(0.0001, t);
+  og.gain.exponentialRampToValueAtTime(0.2, t + dur*0.95);
+  og.gain.linearRampToValueAtTime(0.0001, t + dur + 0.05);
+  o.connect(og); route(og, 1, 0.1); o.start(t); o.stop(t + dur + 0.1);
+}
+
+/* ---- landing: sub boom, coin clinks that follow the bounces, gold dust, outward wave, long bell ---- */
+function sfxLand(kind){
+  kind = kind || 'heads';
+  const ac = audio(), t = ac.currentTime + 0.005;
+  fadeLive(t, 1.8);
+  sfxSpinStop(t);
+  { const o = ac.createOscillator(), g = ac.createGain();
+    o.type = 'sine';
+    o.frequency.setValueAtTime(96, t); o.frequency.exponentialRampToValueAtTime(46, t + 0.9);
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(0.34, t + 0.012); g.gain.exponentialRampToValueAtTime(0.0001, t + 1.8);
+    o.connect(g); route(g, 1, 0.12); o.start(t); o.stop(t + 1.9); }
+  { const s = noiseSrc(t, 0.05), hp = ac.createBiquadFilter(), g = ac.createGain();
+    hp.type = 'highpass'; hp.frequency.value = 3000;
+    g.gain.setValueAtTime(0.3, t); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.03);
+    s.connect(hp); hp.connect(g); route(g, 1, 0.2); }
+  [[0, 1865, .34], [.24, 2093, .20], [.48, 1760, .11], [.68, 2217, .06]].forEach(([dt, f, v])=>{
+    strike(f*(0.97 + Math.random()*0.06), t + dt, v, 2.0, 0.5, (Math.random()-0.5)*0.4,
+           [1, 2.32, 4.25, 6.63], [1, .6, .35, .2]);
+  });
+  strike(2093, t + 0.015, 0.22, 3.0, 0.85);
+  strike(3520, t + 0.03, 0.12, 2.2, 0.8);
+  for(let i=0;i<14;i++){                         /* gold dust: sparse tonal glints (created one by one, not all at once) */
+    later(60 + Math.pow(Math.random(), 1.7)*1900, ()=>
+      strike(3000 + Math.random()*3500, AC.currentTime + 0.005,
+             0.018 + Math.random()*0.035, 0.18 + Math.random()*0.3, 0.8, Math.random()*1.6 - 0.8, [1, 2.76], [1, .3]));
+  }
+  { const s = noiseSrc(t, 1.4), lp = ac.createBiquadFilter(), g = ac.createGain();   /* shockwave ring */
+    lp.type = 'lowpass'; lp.Q.value = 0.8;
+    lp.frequency.setValueAtTime(5000, t); lp.frequency.exponentialRampToValueAtTime(180, t + 1.2);
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(0.22, t + 0.02); g.gain.exponentialRampToValueAtTime(0.0001, t + 1.3);
+    s.connect(lp); lp.connect(g); route(g, 1, 0.4); }
+  strike(kind === 'tails' ? 246.94 : 293.66, t + 0.5, 0.20, 6.0, 0.95, 0,   /* result reveal: one deep, long bell in the key */
+         [1, 2.0, 2.76, 4.1, 5.4, 8.93], [1, .35, .5, .25, .22, .1]);
+  sfxResolve(kind, t);
+}
+/* ============================================================
+   EMOTIONAL LAYER  (voice-budgeted: few oscillators, shared filters, work spread over time)
+   - pad bed (D major, slow chord changes) that breathes with the toss
+   - master low-pass: the world goes underwater as time stretches, then cracks open on impact
+   - "ah" choir, heartbeat that slows with the slow-motion, bells orbiting your head (HRTF)
+   - landing resolution: HEADS = rising, bright   TAILS = falling, deep   EDGE = full climax
+============================================================ */
+const n2f = m => 440*Math.pow(2, (m-69)/12);
+
+/* run work a little later, so a landing never builds hundreds of audio nodes in a single frame */
+function later(ms, fn){ setTimeout(()=>{ if(AC && AC.state === 'running') fn(); }, ms); }
+
+/* detuned saw + sine per note. dest = PADIN (dark slow bed) or null (bright, straight into the room) */
+function swell(midis, t, atk, hold, rel, level, dest){
+  if(AUDIO_LITE && dest) return;                 /* low-load mode: no pad bed */
+  const env = AC.createGain(), end = t + atk + hold + rel;
+  env.gain.setValueAtTime(0.0001, t);
+  env.gain.exponentialRampToValueAtTime(level, t + atk);
+  env.gain.setValueAtTime(level, t + atk + hold);
+  env.gain.exponentialRampToValueAtTime(0.0001, end);
+  midis.forEach(m=>{
+    const f = n2f(m), k = m < 55 ? 1.0 : 0.8;
+    [['sawtooth', 0.14], ['sine', 0.32]].forEach(([type, v])=>{
+      const o = AC.createOscillator(), g = AC.createGain();
+      o.type = type; o.frequency.value = f; o.detune.value = (Math.random()-0.5)*8;
+      g.gain.value = v*k; o.connect(g); g.connect(env); o.start(t); o.stop(end + 0.1);
+    });
+  });
+  if(dest){ env.connect(dest); }
+  else {
+    const lp = AC.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 5200; lp.Q.value = 0.4;
+    env.connect(lp); route(lp, 0.9, 0.8);
+  }
+}
+
+const PAD_PROG = [
+  [38, 50, 57, 66],         /* D         */
+  [35, 47, 54, 62],         /* Bm        */
+  [43, 50, 59, 66],         /* G         */
+  [45, 52, 61, 66]          /* A         */
+];
+function startPad(){
+  if(padStarted || !AC) return; padStarted = true;
+  padNext();
+}
+function padNext(){
+  if(!AC) return;
+  const running = AC.state === 'running';
+  if(running) swell(PAD_PROG[padIdx++ % PAD_PROG.length], AC.currentTime + 0.05, 3.6, 3.2, 4.2, 0.05, PADIN);
+  setTimeout(padNext, running ? 8500 : 250);
+}
+
+/* formant "ah" choir: all saws are summed first, then go through ONE shared vowel filter set + ONE shared vibrato */
+function choirVoices(midis, out, mk){
+  const mix = AC.createGain(); mix.gain.value = 0.42;
+  const vib = mk('sine', 5.4), vg = AC.createGain(); vg.gain.value = 9; vib.connect(vg);
+  midis.forEach(m=>{
+    const o = mk('sawtooth', n2f(m)); o.detune.value = (Math.random()-0.5)*14;
+    vg.connect(o.detune); o.connect(mix);
+  });
+  [[800, 1.0, 4], [1150, 0.55, 5], [2900, 0.22, 6]].forEach(([ff, gg, q])=>{
+    const bp = AC.createBiquadFilter(), bg = AC.createGain();
+    bp.type = 'bandpass'; bp.frequency.value = ff; bp.Q.value = q; bg.gain.value = gg;
+    mix.connect(bp); bp.connect(bg); bg.connect(out);
+  });
+}
+function choirLayer(midis, fadeIn, level){          /* open-ended: faded out by the landing */
+  if(AUDIO_LITE) return;
+  const t = AC.currentTime, L = layer(t, fadeIn, level, 0.8, 1.0);
+  choirVoices(midis, L.env, (type, f)=>layerOsc(L, type, f, t));
+}
+function choirTimed(midis, t, atk, hold, rel, level){
+  if(AUDIO_LITE) return;
+  const env = AC.createGain(), end = t + atk + hold + rel;
+  env.gain.setValueAtTime(0.0001, t);
+  env.gain.exponentialRampToValueAtTime(level, t + atk);
+  env.gain.setValueAtTime(level, t + atk + hold);
+  env.gain.exponentialRampToValueAtTime(0.0001, end);
+  route(env, 0.8, 1.0);
+  choirVoices(midis, env, (type, f)=>{
+    const o = AC.createOscillator(); o.type = type; o.frequency.value = f; o.start(t); o.stop(end + 0.1); return o;
+  });
+}
+
+/* heartbeat: thump + a mid "body" so phone speakers carry it too (kept above the speaker-safe range) */
+function thump(t, f, v){
+  const o = AC.createOscillator(), g = AC.createGain();
+  o.type = 'sine';
+  o.frequency.setValueAtTime(f*1.7, t); o.frequency.exponentialRampToValueAtTime(f*0.8, t + 0.14);
+  g.gain.setValueAtTime(0.0001, t);
+  g.gain.exponentialRampToValueAtTime(v, t + 0.012); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.28);
+  o.connect(g); route(g, 1, 0.12); o.start(t); o.stop(t + 0.3);
+  const o2 = AC.createOscillator(), g2 = AC.createGain(), lp = AC.createBiquadFilter();
+  o2.type = 'triangle';
+  o2.frequency.setValueAtTime(f*3.2, t); o2.frequency.exponentialRampToValueAtTime(f*1.4, t + 0.1);
+  lp.type = 'lowpass'; lp.frequency.value = 420;
+  g2.gain.setValueAtTime(0.0001, t);
+  g2.gain.exponentialRampToValueAtTime(v*0.45, t + 0.01); g2.gain.exponentialRampToValueAtTime(0.0001, t + 0.16);
+  o2.connect(lp); lp.connect(g2); route(g2, 1, 0.18); o2.start(t); o2.stop(t + 0.2);
+}
+function heartbeat(v){ const t = AC.currentTime + 0.01; thump(t, 72, v); thump(t + 0.19, 60, v*0.62); }
+
+/* a glass bell that sweeps around the stereo field (a cheap stereo panner — HRTF was too heavy) */
+function orbitBell(f, vol, dur, rad, turns, a0){
+  if(AUDIO_LITE) return;
+  const t = AC.currentTime + 0.02;
+  const sum = AC.createGain();
+  [[1, 1], [2.0, .33], [3.01, .14]].forEach(([r, gn], i)=>{
+    const o = AC.createOscillator(), g = AC.createGain(), d = dur/(1 + i*0.8);
+    o.type = 'sine'; o.frequency.value = f*r;
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.linearRampToValueAtTime(vol*gn, t + 0.012);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + d);
+    o.connect(g); g.connect(sum); o.start(t); o.stop(t + d + 0.05);
+  });
+  if(AC.createStereoPanner){
+    const sp = AC.createStereoPanner(), N = 40, pans = new Float32Array(N);
+    for(let i=0;i<N;i++) pans[i] = 0.85*Math.sin(a0 + turns*Math.PI*2*i/(N-1));
+    sp.pan.setValueCurveAtTime(pans, t, dur);
+    sum.connect(sp); route(sp, 0.85, 0.55);
+  } else route(sum, 0.85, 0.55);
+}
+
+/* celesta-like pluck for the arpeggios */
+function pluck(f, t, v, pan){ strike(f, t, v, 3.2, 0.9, pan, [1, 2.0, 3.01, 4.2], [1, .28, .12, .05]); }
+
+/* per-frame during the flight: the world sinks underwater as time stretches */
+const BELL_NOTES = [74, 76, 78, 81, 83, 86];
+function sfxFlightUpdate(p, dt){
+  if(!AC || !TONE) return;
+  const slowAmt = Math.min(1, Math.max(0, (1 - slowAt(p))/0.92));
+  const t = AC.currentTime;
+  sfx.acc += dt;
+  if(sfx.acc > 0.08){
+    sfx.acc = 0;
+    const late = p > 0.93;                                          /* the held breath before impact */
+    TONE.frequency.setTargetAtTime(20000*Math.pow(2300/20000, slowAmt), t, 0.18);
+    PADLP.frequency.setTargetAtTime(1100 + 1700*slowAmt, t, 0.3);
+    PADGAIN.gain.setTargetAtTime(late ? 0.22 : 1 + 0.9*slowAmt, t, late ? 0.06 : 0.35);
+    REVWET.gain.setTargetAtTime(0.6 + 0.5*slowAmt, t, 0.4);
+  }
+  if(slowAmt > 0.35 && p < 0.9){
+    sfx.heartT -= dt;
+    if(sfx.heartT <= 0){
+      heartbeat(0.26*(0.55 + 0.45*slowAmt));
+      sfx.heartT = (0.85 + 1.0*slowAmt)*(flip && flip.edge ? 1.3 : 1);   /* slower and slower */
+    }
+  }
+  if(slowAmt > 0.3 && p < 0.9){
+    sfx.bellT -= dt;
+    if(sfx.bellT <= 0){
+      sfx.bellT = 0.9 + Math.random()*0.9;
+      const m = BELL_NOTES[Math.floor(Math.random()*BELL_NOTES.length)];
+      orbitBell(n2f(m), 0.07, 3.2 + Math.random()*1.2, 2.4, (Math.random() < .5 ? -1 : 1)*(0.5 + Math.random()*0.4), Math.random()*6.28);
+    }
+  }
+  if(flip && flip.edge && !sfx.omen && p >= 0.66){                  /* an omen: something is different this time */
+    sfx.omen = true;
+    swell([74, 78, 81, 85], t, 1.6, 0.8, 2.6, 0.04, null);
+  }
+}
+
+/* landing: the world cracks open, then the toss resolves into its own feeling (parts staggered in time) */
+function sfxResolve(kind, t){
+  /* no hard steps (an instant jump clicks): every change is a short glide */
+  TONE.frequency.cancelScheduledValues(t);  TONE.frequency.setTargetAtTime(20000, t, 0.03);
+  PADLP.frequency.cancelScheduledValues(t); PADLP.frequency.setTargetAtTime(3000, t, 0.04);  PADLP.frequency.setTargetAtTime(1100, t + 0.5, 2.5);
+  PADGAIN.gain.cancelScheduledValues(t);    PADGAIN.gain.setTargetAtTime(1.35, t, 0.06);     PADGAIN.gain.setTargetAtTime(1, t + 0.4, 2.2);
+  REVWET.gain.cancelScheduledValues(t);     REVWET.gain.setTargetAtTime(1.0, t, 0.05);       REVWET.gain.setTargetAtTime(0.6, t + 0.5, 2.5);
+
+  if(kind === 'heads'){                    /* rising, bright: D major add9 */
+    later(40,  ()=>swell([50, 62, 66, 69, 74], AC.currentTime + 0.02, 0.9, 3.0, 5.5, 0.045, null));
+    later(140, ()=>choirTimed([62, 66, 69, 74, 78], AC.currentTime + 0.02, 1.4, 2.0, 4.5, 0.22));
+    [74, 78, 81, 85, 86, 90].forEach((m, i)=>
+      later(620 + i*170, ()=>pluck(n2f(m), AC.currentTime + 0.01, 0.10 - 0.008*i, i%2 ? 0.25 : -0.25)));
+    for(let i=0;i<3;i++) later(900 + i*550, ()=>orbitBell(n2f([86, 88, 90][i]), 0.04, 2.6, 2.2, (i%2 ? -1 : 1)*0.7, Math.random()*6.28));
+  }
+  else if(kind === 'tails'){               /* falling, deep: B minor add9 */
+    later(40,  ()=>swell([47, 54, 62, 66, 73], AC.currentTime + 0.02, 1.1, 3.2, 6.0, 0.045, null));
+    later(140, ()=>choirTimed([59, 62, 66, 69, 73], AC.currentTime + 0.02, 1.6, 2.2, 5.0, 0.22));
+    [85, 81, 78, 74, 73, 71].forEach((m, i)=>
+      later(620 + i*210, ()=>pluck(n2f(m), AC.currentTime + 0.01, 0.095, i%2 ? -0.25 : 0.25)));
+    for(let i=0;i<3;i++) later(1000 + i*600, ()=>orbitBell(n2f([78, 81, 85][i]), 0.04, 3.0, 2.2, (i%2 ? -1 : 1)*0.6, Math.random()*6.28));
+  }
+  else {                                   /* edge: a held, unresolved hush — the climax follows */
+    later(40, ()=>swell([50, 57, 64, 69], AC.currentTime + 0.02, 1.4, 2.0, 4.0, 0.04, null));
+  }
+}
+
+/* ---- secret: the coin stands on its edge — choir, harp-like ascent, circling light, one final bell ---- */
+function sfxSecret(){
+  const ac = audio(), t = ac.currentTime + 0.05;
+  choirTimed([50, 57, 62, 66, 69, 74], t, 2.6, 3.5, 5.0, 0.24);
+  { const o = ac.createOscillator(), g = ac.createGain();                     /* warm bass swell (kept above the speaker-safe range) */
+    o.type = 'sine'; o.frequency.value = 73.4;
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(0.20, t + 2.2); g.gain.exponentialRampToValueAtTime(0.0001, t + 6.0);
+    o.connect(g); route(g, 1, 0.1); o.start(t); o.stop(t + 6.1); }
+  later(150, ()=>swell([62, 66, 69, 73, 81], AC.currentTime + 0.02, 1.8, 3.5, 5.0, 0.07, null));
+  [50, 57, 62, 66, 69, 73, 76, 78, 81, 85, 88, 90, 93].forEach((m, i)=>      /* harp-like ascent */
+    later(120 + i*150, ()=>pluck(n2f(m), AC.currentTime + 0.01, 0.06 + 0.012*Math.min(i, 8), Math.sin(i*1.3)*0.5)));
+  later(2300, ()=>{                                                           /* the final bell */
+    strike(n2f(86), AC.currentTime + 0.01, 0.20, 7.0, 0.95, 0, [1, 2.0, 3.0, 4.01], [1, .4, .2, .1]);
+    strike(n2f(74), AC.currentTime + 0.01, 0.16, 8.0, 0.95, 0, [1, 2.0, 3.0], [1, .4, .2]);
+  });
+  for(let i=0;i<8;i++)                                                        /* light circling the head */
+    later(500 + i*450, ()=>orbitBell(n2f(86 + [0, 2, 4, 7][i%4]), 0.05, 2.6 + Math.random(), 2.2, (i%2 ? -1 : 1)*(0.6 + Math.random()*0.5), Math.random()*6.28));
+  REVWET.gain.cancelScheduledValues(t); REVWET.gain.setTargetAtTime(1.0, t, 0.3); REVWET.gain.setTargetAtTime(0.6, t + 8, 2.0);
+  PADGAIN.gain.cancelScheduledValues(t); PADGAIN.gain.setTargetAtTime(1.7, t, 0.5); PADGAIN.gain.setTargetAtTime(1, t + 8, 2.0);
+}
+/* The audio graph (reverb IR, pad bus, filters) is built at page load, while the context is still suspended,
+   so the first toss only has to resume it — no heavy setup landing on the very frame the sound begins. */
+let audioUnlocked = false;
+try{
+  if(!AC){ AC = new (window.AudioContext||window.webkitAudioContext)({ latencyHint:'playback' }); buildBus(); }
+}catch(e){}
+['pointerdown', 'keydown', 'touchend'].forEach(ev=>addEventListener(ev, ()=>{
+  audioUnlocked = true;
+  if(AC && AC.state === 'suspended') AC.resume();
+}, { capture:true }));
+addEventListener('keydown', e=>{ if(e.code === 'KeyL') AUDIO_LITE = !AUDIO_LITE; });   /* L : toggle low-load audio */
+document.addEventListener('visibilitychange', ()=>{
+  if(!AC || !audioUnlocked) return;
+  if(document.hidden) AC.suspend(); else AC.resume();
+});
+addEventListener('keydown', e=>{
+  if(e.code === 'KeyM'){ muted = !muted; if(MASTER) MASTER.gain.setTargetAtTime(muted ? 0 : 0.68, AC.currentTime, 0.05); }
+});
+
+/* ============================================================
+   slow-motion messages  (each split into two halves)
+============================================================ */
+const SLOW_MSGS = [
+  {
+    first_ja: "空中に浮かぶ金貨は、まだどちらでもあり、どちらでもない",
+    first_en: "The coin suspended in mid-air is neither heads nor tails",
+    second_ja: "確定することのないこの瞬間こそ、すべての可能性が生きている",
+    second_en: "In this undetermined moment, every possibility is still alive"
+  },
+  {
+    first_ja: "運命という言葉の裏には、誰かがこの一瞬を選んだという事実が眠っている",
+    first_en: "Behind the word fate lies the truth that someone chose this instant",
+    second_ja: "投げたのはあなたで、見守るのもまたあなただ",
+    second_en: "You cast it, and you are the one who watches over it"
+  },
+  {
+    first_ja: "光に照らされた表と、影に沈んだ裏",
+    first_en: "The face bathed in light, and the reverse cloaked in shadow",
+    second_ja: "どちらを向いていても、金の重みは変わらず、物語は同じ厚みを持つ",
+    second_en: "Either way, the gold weighs the same, and the story holds equal depth"
+  },
+  {
+    first_ja: "回転する間だけ、時間はあなたの味方となる",
+    first_en: "Only while it spins does time become your ally",
+    second_ja: "落ちるまでのわずかな猶予の中に、永遠ほどの静寂が宿っている",
+    second_en: "Within that brief grace before it falls, a silence as vast as eternity dwells"
+  },
+  {
+    first_ja: "表か裏かを問う前に、問うべきは自分自身の心",
+    first_en: "Before asking heads or tails, ask your own heart first",
+    second_ja: "答えを知っているのは、この金貨ではなく、あなたの中にある何かだ",
+    second_en: "The answer lies not in this coin, but in something within you"
+  },
+  {
+    first_ja: "何度投げても結果は分からない。だからこそ人は投げ続ける",
+    first_en: "No matter how many times you cast, the outcome remains unknown",
+    second_ja: "未知の向こう側にある、たった一つの確信を信じて",
+    second_en: "That is why we keep casting — trusting the one certainty beyond the unknown"
+  },
+  {
+    first_ja: "一投が終われば、また新しい一投が始まる",
+    first_en: "When one cast ends, another begins anew",
+    second_ja: "終わりと始まりの境目はどこにもなく、ただ続く螺旋の中にいる",
+    second_en: "There is no boundary between ending and beginning — only an endless spiral"
+  },
+  {
+    first_ja: "落ちる先に待つのは、予定調和ではなく予期せぬ真実",
+    first_en: "What waits beyond the fall is not predestination, but an unexpected truth",
+    second_ja: "受け入れる覚悟ができたとき、コインは初めて意味を持つ",
+    second_en: "Only when you are ready to accept it does the coin finally gain its meaning"
+  }
+];
+
+/* ============================================================
+   flip state machine
+============================================================ */
+const KANJI_EL = document.getElementById('kanji');
+const LATIN_EL = document.getElementById('latin');
+const RESULT_EL = document.getElementById('result');
+const HINT_EL  = document.getElementById('hint');
+const SLOW_MSG_EL = document.getElementById('slow-msg');
+const SLOW_LINE_EL = document.getElementById('slow-line');
+const SLOW_SUB_EL = document.getElementById('slow-sub');
+const SECRET_EL = document.getElementById('secret');
+
+/* 1% — the coin lands on its edge */
+const EDGE_CHANCE = 0.01;
+const EDGE_Y = 1.045;                       /* centre height of a coin standing on its rim */
+let standing = false;                       /* coin currently resting on its edge */
+const coinExtent = z => {                   /* lowest point of the tilted coin below its centre */
+  const s = Math.abs(Math.sin(z)), c = Math.abs(Math.cos(z));
+  return Math.max(s + 0.045, s + 0.065*c);
+};
+
+let state = 'idle';           // idle | flight | settle
+let flip = null, settle = null;
+let lastCoinZ = 0;            // remember landed orientation
+let settleBaseY = 0;          // continuous Y rotation base
+let currentMsg = null;        // selected two-part message for this toss
+const smooth = (a,b,x)=>{ const t=Math.min(1,Math.max(0,(x-a)/(b-a))); return t*t*(3-2*t); };
+
+/* ============================================================
+   CAMERA DIRECTOR
+   1 launch  : whip down to a floor-level hero angle, wide lens, look up and chase the coin
+   2 rise    : boom up with the coin, start banking into an arc
+   3 slow-mo : dolly-zoom, then a slow arc around the hovering coin (about 75 degrees, then back to the front)
+   4 fall    : slow push-in while descending to mirror level
+   5 land    : impact zoom + aberration + radial blur, then a long rising reveal
+============================================================ */
+const FLIGHT_DUR = 3.0;
+const slowAt = p => 1 - 0.92*(smooth(0.22,0.50,p) - smooth(0.55,0.88,p));
+
+/* critically-damped spring with velocity (smooth start AND stop for every camera move) */
+class Damped{
+  constructor(v){ this.v = v; this.vel = 0; }
+  to(target, smoothTime, dt){
+    const w = 2/Math.max(0.0001, smoothTime), x = w*dt;
+    const ex = 1/(1 + x + 0.48*x*x + 0.235*x*x*x);
+    const change = this.v - target;
+    const tmp = (this.vel + w*change)*dt;
+    this.vel = (this.vel - w*tmp)*ex;
+    let out = target + (change + tmp)*ex;
+    if((target - this.v > 0) === (out > target)){ out = target; this.vel = 0; }
+    return this.v = out;
+  }
+}
+
+/* orbit: a gentle arc out to one side while the coin hangs, then back to the front for the landing (net rotation 0) */
+const AZ_PEAK = 75*Math.PI/180;
+const swingOut  = p => smooth(0.06,0.28,p) * (1 - smooth(0.40,0.56,p));
+const swingBack = p => smooth(0.56,0.70,p) * (1 - smooth(0.86,0.94,p));
+let K_OUT = 1, K_BACK = 1;
+(function calibrate(){
+  let ft = 0, iOut = 0, iBack = 0; const h = 1/240;
+  for(let i=0;i<20000;i++){
+    const pp = ft/FLIGHT_DUR; if(pp >= 1) break;
+    ft += h*slowAt(pp);
+    iOut += swingOut(pp)*h; iBack += swingBack(pp)*h;
+  }
+  K_OUT = AZ_PEAK/iOut; K_BACK = AZ_PEAK/iBack;
+})();
+const omegaAt = p => K_OUT*swingOut(p) - K_BACK*swingBack(p);
+
+/* shot list over flight progress p :  R = distance, H = height above the coin, fov, drop = frame the coin above centre */
+const SHOT = [
+  //  p     R     H     fov   drop
+  [0.00, 5.40,  0.90,  55,  0.00],   // = idle framing
+  [0.04, 4.00, -0.55,  64,  0.10],   // whip down: floor-level hero angle, wide lens
+  [0.12, 4.40, -0.35,  60,  0.18],   // look up, chase the rocketing coin
+  [0.22, 5.00,  0.15,  48,  0.16],   // boom up — slow motion begins
+  [0.34, 6.20,  0.05,  38,  0.14],   // dolly-zoom: back off while the lens tightens
+  [0.48, 7.40, -0.25,  29,  0.14],   //   (coin holds its size, the world stretches)
+  [0.60, 6.20,  0.00,  29,  0.14],   // apex: slow push-in while orbiting
+  [0.72, 5.40, -0.30,  36,  0.12],
+  [0.84, 4.60, -0.55,  46,  0.00],   // descend with the coin
+  [0.93, 4.20, -0.90,  55, -0.15],
+  [1.00, 4.00, -1.20,  58, -0.25]    // mirror level: coin meets its own reflection
+];
+function shotAt(p){
+  const n = SHOT.length;
+  if(p <= SHOT[0][0]) return SHOT[0].slice(1);
+  if(p >= SHOT[n-1][0]) return SHOT[n-1].slice(1);
+  let i = 0; while(p > SHOT[i+1][0]) i++;
+  const a = SHOT[i], b = SHOT[i+1], prev = SHOT[Math.max(i-1,0)], next = SHOT[Math.min(i+2,n-1)];
+  const h = b[0]-a[0], t = (p-a[0])/h, t2 = t*t, t3 = t2*t;
+  const h00 = 2*t3-3*t2+1, h10 = t3-2*t2+t, h01 = -2*t3+3*t2, h11 = t3-t2;
+  const out = [];
+  for(let k=1;k<a.length;k++){
+    const m0 = i>0     ? (b[k]-prev[k])/(b[0]-prev[0]) : (b[k]-a[k])/h;
+    const m1 = i+2<n   ? (next[k]-a[k])/(next[0]-a[0]) : (b[k]-a[k])/h;
+    out.push(h00*a[k] + h10*h*m0 + h01*b[k] + h11*h*m1);
+  }
+  return out;
+}
+
+const FLOOR_Y = 0.34;
+const C = {                                   /* intro: start low & close, then ease out to the home shot */
+  az:new Damped(-0.9), R:new Damped(3.6), H:new Damped(-0.55), fov:new Damped(66),
+  roll:new Damped(0), py:new Damped(LOOK_BASE.y), drop:new Damped(0)
+};
+let azTarget = 0, camDir = 1, kick = 0, punch = 0, shakeE = 0, swayW = 1, vig = 0;
+
+function camStartFlight(){
+  const k = Math.round(C.az.v/(Math.PI*2));            /* keep angles bounded between tosses */
+  C.az.v -= k*Math.PI*2; azTarget -= k*Math.PI*2;
+  camDir = Math.random()<0.5 ? -1 : 1;
+  kick = Math.max(kick, 0.6); shakeE = Math.max(shakeE, 0.35);
+  document.body.classList.add('cine');
+}
+function camOnLand(){
+  azTarget = Math.round(azTarget/(Math.PI*2))*Math.PI*2;   /* settle exactly on the front view */
+  kick = 1; punch = 1; shakeE = 1;
+  setTimeout(()=>document.body.classList.remove('cine'), 800);
+}
+
+function directCamera(dt, t){
+  const flying = state === 'flight';
+  const intro = t < 4 ? 1.5 : 1;
+  let tR = 5.4, tH = 0.9, tFov = 55, tDrop = 0, tRoll = 0, pivY = LOOK_BASE.y, om = 0, slowAmt = 0;
+  let sAz = 1.5*intro, sR = 1.3*intro, sH = 1.2*intro, sF = 1.2*intro, sRoll = 1.0, sPiv = 1.0*intro, sDrop = 1.0;
+
+  if(flying){
+    const p = Math.min(flip.t/flip.dur, 1);
+    const s = shotAt(p);
+    tR = s[0]; tH = s[1]; tFov = s[2]; tDrop = s[3];
+    pivY = LOOK_BASE.y + (coin.position.y - LOOK_BASE.y)*smooth(0, 0.12, p);
+    om = camDir*omegaAt(p);
+    azTarget += om*dt;
+    tRoll = camDir*0.06*smooth(0.10,0.32,p)*(1-smooth(0.72,0.96,p));   /* slight bank into the arc */
+    sAz = 0.35; sR = 0.5; sH = 0.45; sF = 0.45; sRoll = 0.6; sDrop = 0.5;
+    sPiv = 0.30 - 0.20*smooth(0.55,0.90,p);                            /* loose chase, tight on the fall */
+    slowAmt = (1 - slowAt(p))/0.92;
+  }
+
+  const az = C.az.to(azTarget, sAz, dt),  R    = C.R.to(tR, sR, dt),
+        H  = C.H.to(tH, sH, dt),          fov  = C.fov.to(tFov, sF, dt),
+        roll = C.roll.to(tRoll, sRoll, dt), py = C.py.to(pivY, sPiv, dt),
+        drop = C.drop.to(tDrop, sDrop, dt);
+
+  punch *= Math.exp(-3.0*dt);
+  kick  *= Math.exp(-3.2*dt);
+  shakeE = Math.max(0, shakeE - dt*2.9);
+  swayW += ((flying?0:1) - swayW)*(1 - Math.exp(-2.5*dt));
+  vig   += (slowAmt - vig)*(1 - Math.exp(-3*dt));
+
+  const hand = flying ? 1 : 0.35, sh = 0.12*shakeE;
+  const Rf = R - 0.45*punch;                                           /* impact push-in */
+  let th = Math.tan(THREE.MathUtils.degToRad((fov - 7*punch)*0.5));
+  th = Math.max(th, 1.4/(Rf*camera.aspect));                           /* keep the coin in frame on portrait screens */
+  const azF = az + Math.sin(t*0.4)*0.022*swayW;
+
+  camera.fov = THREE.MathUtils.radToDeg(Math.atan(th))*2;
+  camera.updateProjectionMatrix();
+  camera.position.set(
+    Rf*Math.sin(azF) + Math.sin(t*1.9+1.3)*0.016*hand + (Math.random()-0.5)*sh,
+    Math.max(FLOOR_Y, py + H) + Math.sin(t*0.53)*0.06*swayW + Math.sin(t*2.3)*0.012*hand + (Math.random()-0.5)*sh,
+    Rf*Math.cos(azF) + Math.cos(t*1.6)*0.016*hand + (Math.random()-0.5)*sh
+  );
+  camera.lookAt(0, py - drop*Rf*th, 0);
+  camera.rotateZ(roll + Math.sin(t*1.1)*0.004*hand);
+
+  grade.uniforms.uAberr.value  = 0.0010 + 0.011*kick + 0.0030*Math.abs(om);
+  grade.uniforms.uRadial.value = 0.07*kick;
+  grade.uniforms.uVig.value    = vig;
+  bloom.strength = 0.50 + 0.22*vig + 0.30*kick;
+}
+
+function startFlip(){
+  if(state !== 'idle') return;
+  audio();
+  state = 'flight';
+  RESULT_EL.classList.remove('show');
+  HINT_EL.style.opacity = 0;
+  SLOW_MSG_EL.classList.remove('show');
+
+  SECRET_EL.classList.remove('show');
+
+  const edge  = Math.random() < EDGE_CHANCE;            // 1% : lands on its edge
+  const omote = Math.random() < 0.5;                    // result
+  const spins = 12 + Math.floor(Math.random()*9);       // half-turns: 6-10 full revolutions
+  /* rotation.z = spins*PI ; even spins => 表 up ; (n + 0.5) half-turns => standing on edge */
+  const need = edge ? spins + 0.5
+             : omote ? (spins%2===0 ? spins : spins+1) : (spins%2===1 ? spins : spins+1);
+  flip = { t:0, dur:3.0, spins:need, peak:3.3+Math.random()*0.5, omote, edge,
+           zStart: standing ? lastCoinZ : 0 };
+
+  /* pick a random two-part message for this toss */
+  currentMsg = SLOW_MSGS[Math.floor(Math.random()*SLOW_MSGS.length)];
+  SLOW_LINE_EL.textContent = currentMsg.first_ja;
+  SLOW_SUB_EL.textContent = currentMsg.first_en;
+  if(edge){                                             /* foreshadow: something is different this time */
+    currentMsg = Object.assign({}, currentMsg, {
+      second_ja: "……何かが、いつもと違う",
+      second_en: "...something feels different this time"
+    });
+  }
+
+  sfxLaunch();
+  sfxSpinStart();
+  camStartFlight();
+}
+
+function land(){
+  state = 'settle';
+  settle = { t:0 };
+  burstSparks(flip.edge);
+  waveT = 0;
+  flashV = 1;
+  camOnLand();
+  sfxLand(flip.edge ? 'edge' : flip.omote ? 'heads' : 'tails');
+  if(navigator.vibrate){ try{ navigator.vibrate(flip.edge ? [40,60,40,60,180] : [22,30,60]); }catch(e){} }
+
+  lastCoinZ = flip.edge ? Math.PI/2 : flip.spins*Math.PI;
+  standing = flip.edge;
+  settleBaseY = coin.rotation.y;
+
+  if(flip.edge){
+    /* ---- 1% secret: the coin stands on its edge ---- */
+    setTimeout(()=>{ sfxSecret(); flashV = 1; burstSparks(true); }, 900);
+    setTimeout(()=>{ flashV = Math.max(flashV, 0.6); burstSparks(true); }, 2000);
+    setTimeout(()=>SECRET_EL.classList.add('show'), 1300);
+    setTimeout(()=>{ HINT_EL.style.opacity = 1; }, 4200);
+    return;
+  }
+  KANJI_EL.textContent = flip.omote ? '表' : '裏';
+  LATIN_EL.textContent = flip.omote ? 'HEADS' : 'TAILS';
+  setTimeout(()=>RESULT_EL.classList.add('show'), 500);
+  setTimeout(()=>{ HINT_EL.style.opacity = 1; }, 1400);
+}
+
+addEventListener('pointerdown', startFlip);
+addEventListener('keydown', e=>{ if(e.code==='Space'){ e.preventDefault(); startFlip(); } });
+
+/* ============================================================
+   main loop
+============================================================ */
+const clock = new THREE.Clock();
+let frameEma = 0.016, lagT = 0;
+/* spin angle progress: constant angular velocity (like a real coin), quick spin-up, soft wind-down so it lands flat.
+   slow-motion then simply stretches time, so the coin keeps turning gracefully while it hangs. */
+const SPIN_A = 0.03, SPIN_B = 0.94;
+const SPIN_T = SPIN_A/2 + (SPIN_B-SPIN_A) + (1-SPIN_B)/2;
+const spinF = p => {
+  let x;
+  if(p < SPIN_A)      x = p*p/(2*SPIN_A);
+  else if(p <= SPIN_B) x = SPIN_A/2 + (p-SPIN_A);
+  else { const q = p-SPIN_B; x = SPIN_A/2 + (SPIN_B-SPIN_A) + q - q*q/(2*(1-SPIN_B)); }
+  return x/SPIN_T;
+};
+const spinRate = (p, S)=>{            /* real-time revolutions per second (drives the whir) */
+  const v = p < SPIN_A ? p/SPIN_A : p > SPIN_B ? (1-p)/(1-SPIN_B) : 1;
+  return S*0.5*(v/SPIN_T)*slowAt(p)/FLIGHT_DUR;
+};
+const easeIO = t => t<.5 ? 4*t*t*t : 1-Math.pow(-2*t+2,3)/2;
+
+function tick(){
+  requestAnimationFrame(tick);
+  const rawDt = clock.getDelta();
+  const dt = Math.min(rawDt, 0.05);
+  /* if the page itself is struggling (< ~30 fps for 3 s), the audio thread is starved too: switch to low-load audio */
+  frameEma += (rawDt - frameEma)*0.04;
+  if(!AUDIO_LITE){
+    if(clock.elapsedTime > 8 && frameEma > 0.034) lagT += rawDt; else lagT = Math.max(0, lagT - rawDt);
+    if(lagT > 3) AUDIO_LITE = true;
+  }
+  const t  = clock.elapsedTime;
+  grade.uniforms.uTime.value = t;
+
+  /* ----- coin state machine ----- */
+  if(state === 'idle'){
+    coin.rotation.set(0, t*0.35, lastCoinZ);
+    coin.position.y = standing ? EDGE_Y + Math.sin(t*1.3)*0.004 : COIN_REST_Y + Math.sin(t*1.3)*0.008;
+  }
+  else if(state === 'flight'){
+    /* slow-motion band mid-flight — stronger and longer */
+    const pPrev = flip.t / flip.dur;
+    const slow = slowAt(pPrev);
+    flip.t += dt * slow;
+    const p = Math.min(flip.t / flip.dur, 1);
+    if(!sfx.slow  && p >= 0.22){ sfx.slow  = true; sfxSlowEnter(); }
+    if(!sfx.apex  && p >= 0.50){ sfx.apex  = true; sfxApex(); }
+    if(!sfx.riser && p >= 0.62){ sfx.riser = true; sfxRiser(2.1); }
+    sfxSpinUpdate(spinRate(p, flip.spins));
+    sfxFlightUpdate(p, dt);
+    const zNow = flip.zStart + (flip.spins*Math.PI - flip.zStart)*spinF(p);
+    let yNow = COIN_REST_Y + flip.peak * 4*p*(1-p);
+    if(flip.edge || standing) yNow = Math.max(yNow, coinExtent(zNow));   /* never sink into the floor while upright */
+    coin.position.y = yNow;
+    coin.rotation.set(
+      0.22*Math.sin(p*Math.PI*2.2),
+      t*0.6,
+      zNow
+    );
+
+    /* show/hide slow-motion message — two halves across the slow bands */
+    const inSlow1 = p >= 0.22 && p <= 0.50;
+    const inSlow2 = p >= 0.55 && p <= 0.88;
+
+    if(inSlow1 || inSlow2){
+      SLOW_MSG_EL.classList.add('show');
+      if(inSlow1){
+        SLOW_LINE_EL.textContent = currentMsg.first_ja;
+        SLOW_SUB_EL.textContent = currentMsg.first_en;
+      } else {
+        SLOW_LINE_EL.textContent = currentMsg.second_ja;
+        SLOW_SUB_EL.textContent = currentMsg.second_en;
+      }
+    } else {
+      SLOW_MSG_EL.classList.remove('show');
+    }
+
+    if(p >= 1){
+      coin.rotation.z = flip.spins*Math.PI;               // exact landing (flat, or on edge)
+      SLOW_MSG_EL.classList.remove('show');
+      land();
+    }
+  }
+  else if(state === 'settle'){
+    settle.t += dt;
+    const st = settle.t;
+    if(flip.edge){
+      /* teeters on its rim: rocks side to side, hangs on a knife edge, then holds upright */
+      const d  = Math.exp(-1.7*st);
+      const zz = lastCoinZ + 0.26*d*Math.sin(st*7.5);
+      coin.rotation.z = zz;
+      coin.rotation.x = Math.sin(st*11) * 0.09 * d;
+      coin.position.y = coinExtent(zz) + Math.abs(Math.sin(st*10))*0.07*Math.exp(-4.5*st);
+      coin.rotation.y = settleBaseY + st * 0.25;
+      if(st > 3.4){ state='idle'; }
+    } else {
+    const damp = Math.exp(-5.5*st);
+    /* Z stays locked to landed face; tiny X tilt gives bounce feel */
+    coin.rotation.z = lastCoinZ;
+    coin.rotation.x = Math.sin(st*16) * 0.06 * damp;
+    coin.position.y = COIN_REST_Y + Math.abs(Math.sin(st*13))*0.22*damp;
+    /* Y continues smoothly from landing angle */
+    coin.rotation.y = settleBaseY + st * 0.25;
+    if(st > 1.6){ state='idle'; }
+    }
+  }
+
+  /* ----- FX ----- */
+  if(waveT < 1){
+    waveT += dt*1.6;
+    const s = 1 + waveT*9;
+    wave.scale.set(s,s,s);
+    wave.material.opacity = Math.max(0, 0.85*(1-waveT));
+  } else wave.material.opacity = 0;
+
+  if(flashV > 0.01){
+    flashV *= Math.exp(-7*dt);
+    flashEl.style.opacity = (flashV*0.85).toFixed(3);
+    flashLight.intensity = flashV*60;
+  } else { flashEl.style.opacity = 0; flashLight.intensity = 0; }
+
+  /* sparks */
+  let alive=false;
+  for(let i=0;i<SPARKS;i++){
+    if(sparkLife[i]<=0) continue;
+    alive=true; sparkLife[i]-=dt;
+    sparkVel[i*3+1]-=9.8*dt;
+    sparkPos[i*3]+=sparkVel[i*3]*dt;
+    sparkPos[i*3+1]+=sparkVel[i*3+1]*dt;
+    sparkPos[i*3+2]+=sparkVel[i*3+2]*dt;
+    if(sparkPos[i*3+1]<0.02||sparkLife[i]<=0){ sparkLife[i]=0; sparkPos[i*3+1]=-999; }
+  }
+  if(alive) sparkGeo.attributes.position.needsUpdate=true;
+
+  /* dust drift */
+  const dp = dustGeo.attributes.position.array;
+  for(let i=0;i<DUST;i++){
+    dp[i*3+1]+=dt*0.12;
+    if(dp[i*3+1]>7) dp[i*3+1]=0;
+  }
+  dustGeo.attributes.position.needsUpdate=true;
+
+  /* ----- camera director ----- */
+  directCamera(dt, t);
+
+  /* breathing lights */
+  key.intensity = 260 + Math.sin(t*1.7)*18;
+  rim.intensity = 180 + Math.sin(t*1.1+2)*22;
+
+  /* calmer reflections while spinning, eased in/out */
+  coinGlint += ((state === 'flight' ? SPIN_GLINT : 1) - coinGlint)*(1 - Math.exp(-3*dt));
+  for(const m of coinMats) m.envMapIntensity = m.userData.baseEnv*coinGlint;
+
+  composer.render();
+}
+tick();
+
+/* intro fade */
+setTimeout(()=>document.getElementById('intro').classList.add('gone'), 900);
+
+addEventListener('resize', ()=>{
+  camera.aspect = innerWidth/innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth, innerHeight);
+  composer.setSize(innerWidth, innerHeight);
+});
+</script>
+</body>
+</html>
